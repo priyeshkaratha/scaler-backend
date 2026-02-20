@@ -1,0 +1,12 @@
+package com.scaler.productcatalog.repositories;
+
+import com.scaler.productcatalog.models.Product;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.JpaRepository;
+
+public interface ProductRepository extends JpaRepository<Product, Long> {
+    Product findByTitle(String title);
+    Product save(Product product);
+    Page<Product> findAll(Pageable pageable);
+}

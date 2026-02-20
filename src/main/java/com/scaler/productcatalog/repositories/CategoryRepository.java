@@ -1,0 +1,12 @@
+package com.scaler.productcatalog.repositories;
+
+import com.scaler.productcatalog.models.Category;
+import com.scaler.productcatalog.models.Product;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.JpaRepository;
+
+public interface CategoryRepository extends JpaRepository<Category, Long> {
+    Category findByTitle(String title);
+    Category save(Category product);
+}
