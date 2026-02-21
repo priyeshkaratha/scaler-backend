@@ -6,10 +6,14 @@ import com.scaler.productcatalog.models.Role;
 import com.scaler.productcatalog.models.User;
 import com.scaler.productcatalog.repositories.RoleRepository;
 import com.scaler.productcatalog.repositories.UserRepository;
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.security.MacAlgorithm;
+import org.antlr.v4.runtime.misc.Pair;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import javax.crypto.SecretKey;
 import java.util.Date;
 import java.util.Optional;
 
@@ -28,7 +32,7 @@ public class AuthServiceImpl implements AuthService{
     private BCryptPasswordEncoder encoder;
 
     @Override
-    public User login(String email, String password) throws UserNotFoundException {
+    public Pair<User, String> login(String email, String password) throws UserNotFoundException {
         Optional<User> user = userRepository.findByEmail(email);
         if(user.isEmpty()){
             throw new UserNotFoundException("User not found with email: " + email);
@@ -36,7 +40,17 @@ public class AuthServiceImpl implements AuthService{
         if(!encoder.matches(password, user.get().getPassword())){
             throw new UserNotFoundException("Invalid password");
         }
-        return user.get();
+        MacAlgorithm algorithm = Jwts.SIG.HS256;
+        SecretKey secretKey = algorithm.key().build();
+        String token = Jwts.builder()
+                .subject(user.get().getEmail())
+                .claim("userId", user.get().getId())
+                .issuedAt(new Date())
+                .expiration(new Date(System.currentTimeMillis() + 1000 * 60 * 60)) // 1 hour
+                .signWith(secretKey)
+                .compact();
+
+        return new Pair<>(user.get(), token);
     }
 
     @Override
