@@ -13,7 +13,7 @@ public class Product extends BaseModel {
     private String title;
     private String description;
     private String imageUrl;
-    private String price;
+    private Double price;
 
     @ManyToOne
     @JoinColumn(name = "category_id")

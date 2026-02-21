@@ -19,6 +19,7 @@ public class ProductCreateRequestDto {
         product.setIsActive(true);
         product.setDescription(description);
         product.setImageUrl(imageUrl);
+        product.setPrice(price);
         return product;
     }
 }

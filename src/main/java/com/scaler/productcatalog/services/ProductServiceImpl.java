@@ -10,7 +10,9 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
+import javax.swing.text.html.Option;
 import java.util.Date;
+import java.util.Optional;
 
 @Service
 public class ProductServiceImpl implements ProductService{
@@ -42,13 +44,17 @@ public class ProductServiceImpl implements ProductService{
 
     @Override
     public Product createProduct(Product product, String category) {
-        try {
-            Category categoryObject = categoryService.getCategoryByTitle(category);
+        Optional<Category> optionalCategory = categoryService.getCategoryByTitle(category);
+        if (optionalCategory.isPresent()) {
+            Category categoryObject = optionalCategory.get();
             product.setCategory(categoryObject);
-        } catch (Exception e) {
+        } else {
             Category categoryObject = categoryService.createCategory(category);
             product.setCategory(categoryObject);
         }
+        product.setCreatedAt(new Date());
+        product.setUpdatedAt(new Date());
+        product.setIsActive(true);
         return productRepository.save(product);
     }
 
@@ -64,7 +70,22 @@ public class ProductServiceImpl implements ProductService{
     }
 
     @Override
-    public Product updateProduct(Long id, String title, String description, Double price, Category category, String imageUrl) throws ProductNotFoundException {
-        return null;
+    public Product updateProduct(Long productId, Product product, String category) throws ProductNotFoundException {
+        Product productObject = getProductById(productId);
+        productObject.setTitle(product.getTitle());
+        productObject.setDescription(product.getDescription());
+        productObject.setPrice(product.getPrice());
+        productObject.setImageUrl(product.getImageUrl());
+        Optional<Category> optionalCategory = categoryService.getCategoryByTitle(category);
+        if (optionalCategory.isPresent()) {
+            Category categoryObject = optionalCategory.get();
+            productObject.setCategory(categoryObject);
+        } else {
+            Category categoryObject = categoryService.createCategory(category);
+            productObject.setCategory(categoryObject);
+        }
+        productObject.setUpdatedAt(new Date());
+        productObject.setIsActive(true);
+        return productRepository.save(productObject);
     }
 }

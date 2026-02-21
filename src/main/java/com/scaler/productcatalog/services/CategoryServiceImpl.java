@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.NoSuchElementException;
+import java.util.Optional;
 
 @Service
 public class CategoryServiceImpl implements CategoryService{
@@ -17,22 +18,15 @@ public class CategoryServiceImpl implements CategoryService{
     public Category createCategory(String categoryTitle) {
         Category category = new Category();
         category.setTitle(categoryTitle);
+        category.setIsActive(true);
+        category.setCreatedAt(new java.util.Date());
+        category.setUpdatedAt(new java.util.Date());
         category = categoryRepository.save(category);
         return category;
     }
 
     @Override
-    public List<Product> getProductsInCategory(String category) throws NoSuchElementException {
-        return List.of();
-    }
-
-    @Override
-    public List<Category> getAllCategories() throws NullPointerException {
-        return List.of();
-    }
-
-    @Override
-    public Category getCategoryByTitle(String category) throws NoSuchElementException {
+    public Optional<Category> getCategoryByTitle(String category) throws NoSuchElementException {
         return categoryRepository.findByTitle(category);
     }
 }

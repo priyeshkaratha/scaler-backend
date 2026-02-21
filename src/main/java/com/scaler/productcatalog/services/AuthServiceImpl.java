@@ -54,7 +54,7 @@ public class AuthServiceImpl implements AuthService{
                 .subject(user.get().getEmail())
                 .claim("userId", user.get().getId())
                 .issuedAt(new Date())
-                .expiration(new Date(System.currentTimeMillis() + 1000 * 60 * 60)) // 1 hour
+                .expiration(new Date(System.currentTimeMillis() + 1000 * 60 * 1)) // 1 hour
                 .signWith(secretKey)
                 .compact();
 
@@ -119,13 +119,16 @@ public class AuthServiceImpl implements AuthService{
         Date exp = claims.getExpiration();
         Date now = new Date();
         if(now.after(exp)){
+            sessionObject.setIsActive(false);
             throw new UserNotFoundException("Token expired");
         }
         User user = sessionObject.getUser();
         if (Boolean.FALSE.equals(user.getIsActive())) {
+            sessionObject.setIsActive(false);
             throw new UserNotFoundException("User is inactive");
         }
         if(!user.getId().equals(Long.parseLong(userId))){
+            sessionObject.setIsActive(false);
             throw new UserNotFoundException("Invalid token");
         }
         return user;

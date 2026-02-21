@@ -6,6 +6,8 @@ import com.scaler.productcatalog.models.Product;
 import com.scaler.productcatalog.services.ProductService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -17,31 +19,34 @@ public class ProductController {
     private ProductService productService;
 
     @GetMapping()
-    public Page<Product> getAllProducts(
+    public ResponseEntity<Page<Product>> getAllProducts(
             @RequestParam(defaultValue = "0") int pageNumber,
             @RequestParam(defaultValue = "10") int pageSize,
-            @RequestParam(defaultValue = "id") String fieldName) {
-        try {
-            return productService.getAllProducts(pageNumber, pageSize, fieldName);
-        } catch (ProductNotFoundException ex) {
-            ex.printStackTrace();
-        }
-        return null;
+            @RequestParam(defaultValue = "id") String fieldName) throws ProductNotFoundException {
+        Page<Product> products =  productService.getAllProducts(pageNumber, pageSize, fieldName);
+        return new ResponseEntity<>(products, HttpStatus.OK);
     }
 
     @GetMapping("/{id}")
-    public Product getProductById(@PathVariable Long id) throws ProductNotFoundException {
-        return productService.getProductById(id);
+    public ResponseEntity<Product> getProductById(@PathVariable Long id) throws ProductNotFoundException {
+        return new ResponseEntity<>(productService.getProductById(id), HttpStatus.OK);
     }
 
     @PostMapping
-    public Product createProduct(@RequestBody ProductCreateRequestDto productDto) {
-        Product product = productService.createProduct(productDto.getProduct(), productDto.getCategory());
-        return product;
+    public ResponseEntity<Product> createProduct(@RequestBody ProductCreateRequestDto productDto) {
+        Product product = productService.createProduct(
+                productDto.getProduct(), productDto.getCategory());
+        return new ResponseEntity<>(product, HttpStatus.OK);
     }
 
     @DeleteMapping("/{id}")
-    public Product deleteProduct(@PathVariable Long id) throws ProductNotFoundException {
-        return productService.deleteProduct(id);
+    public ResponseEntity<Product> deleteProduct(@PathVariable Long id) throws ProductNotFoundException {
+        return new ResponseEntity<>(productService.deleteProduct(id), HttpStatus.OK);
+    }
+
+    @PutMapping("/{id}")
+    public ResponseEntity<Product> updateProduct(@PathVariable Long id, @RequestBody ProductCreateRequestDto productDto) throws ProductNotFoundException {
+        Product product = productService.updateProduct(id, productDto.getProduct(), productDto.getCategory());
+        return new ResponseEntity<>(product, HttpStatus.OK);
     }
 }
