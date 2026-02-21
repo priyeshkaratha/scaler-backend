@@ -20,11 +20,7 @@ public class SearchController {
 
     @PostMapping
     public ResponseEntity<Page<Product>> search(@RequestBody SearchRequestDto searchRequestDto){
-
-        Page<Product> products = searchService.searchProducts(searchRequestDto.getQuery(),
-                searchRequestDto.getPageNumber(),
-                searchRequestDto.getPageSize(),
-                searchRequestDto.getSortBy());
+        Page<Product> products = searchService.searchProducts(searchRequestDto);
         return ResponseEntity.ok(products);
     }
 }
