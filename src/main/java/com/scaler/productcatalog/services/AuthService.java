@@ -7,4 +7,5 @@ import org.antlr.v4.runtime.misc.Pair;
 public interface AuthService {
     Pair<User, String> login(String email, String password) throws UserNotFoundException;
     User register(String email, String password, String firstName, String lastName) throws UserNotFoundException;
+    User validateToken(String token) throws UserNotFoundException;
 }
