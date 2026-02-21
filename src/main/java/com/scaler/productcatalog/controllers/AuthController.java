@@ -1,8 +1,9 @@
 package com.scaler.productcatalog.controllers;
 
 import com.scaler.productcatalog.dtos.LoginRequestDto;
-import com.scaler.productcatalog.dtos.UserDto;
 import com.scaler.productcatalog.dtos.SignUpRequestDto;
+import com.scaler.productcatalog.dtos.UserDto;
+import com.scaler.productcatalog.dtos.ValidateTokenRequestDto;
 import com.scaler.productcatalog.models.User;
 import com.scaler.productcatalog.services.AuthService;
 import org.antlr.v4.runtime.misc.Pair;
@@ -54,8 +55,8 @@ public class AuthController {
     }
 
     @PostMapping("/validate")
-    public ResponseEntity<Void> validateToken(@RequestBody String token){
-        authService.validateToken(token);
+    public ResponseEntity<Void> validateToken(@RequestBody ValidateTokenRequestDto request){
+        authService.validateToken(request.getToken());
         return ResponseEntity.ok().build();
     }
 }

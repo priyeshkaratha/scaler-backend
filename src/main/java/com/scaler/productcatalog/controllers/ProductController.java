@@ -10,11 +10,13 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
+import java.util.Set;
 
 @RestController
 @RequestMapping("/products")
 public class ProductController {
+    private static final Set<String> ALLOWED_SORT_FIELDS = Set.of("id", "title", "price", "createdAt", "updatedAt");
+
     @Autowired
     private ProductService productService;
 
@@ -23,7 +25,8 @@ public class ProductController {
             @RequestParam(defaultValue = "0") int pageNumber,
             @RequestParam(defaultValue = "10") int pageSize,
             @RequestParam(defaultValue = "id") String fieldName) throws ProductNotFoundException {
-        Page<Product> products =  productService.getAllProducts(pageNumber, pageSize, fieldName);
+        String sortField = ALLOWED_SORT_FIELDS.contains(fieldName) ? fieldName : "id";
+        Page<Product> products =  productService.getAllProducts(pageNumber, pageSize, sortField);
         return new ResponseEntity<>(products, HttpStatus.OK);
     }
 

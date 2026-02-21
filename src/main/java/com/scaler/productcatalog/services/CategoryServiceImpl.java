@@ -4,6 +4,10 @@ import com.scaler.productcatalog.models.Category;
 import com.scaler.productcatalog.models.Product;
 import com.scaler.productcatalog.repositories.CategoryRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -28,5 +32,14 @@ public class CategoryServiceImpl implements CategoryService{
     @Override
     public Optional<Category> getCategoryByTitle(String category) throws NoSuchElementException {
         return categoryRepository.findByTitle(category);
+    }
+
+    @Override
+    public Page<Category> getAllCategories(int pageNumber, int pageSize, String fieldName) {
+        Pageable pageable = PageRequest.of(
+                pageNumber,
+                pageSize,
+                Sort.by(fieldName).ascending());
+        return categoryRepository.findAll(pageable);
     }
 }

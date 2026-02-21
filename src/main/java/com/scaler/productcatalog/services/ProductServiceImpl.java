@@ -1,5 +1,6 @@
 package com.scaler.productcatalog.services;
 
+import com.scaler.productcatalog.exceptions.CategoryNotFoundException;
 import com.scaler.productcatalog.exceptions.ProductNotFoundException;
 import com.scaler.productcatalog.models.Category;
 import com.scaler.productcatalog.models.Product;
@@ -10,7 +11,6 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
-import javax.swing.text.html.Option;
 import java.util.Date;
 import java.util.Optional;
 
@@ -29,29 +29,22 @@ public class ProductServiceImpl implements ProductService{
 
     @Override
     public Page<Product> getAllProducts(int pageNumber, int pageSize, String fieldName) throws ProductNotFoundException {
-        Page<Product> listOfProducts = productRepository.findAll(
+        return productRepository.findAll(
                 PageRequest.of(
                         pageNumber,
                         pageSize,
                         Sort.by(fieldName).ascending()
                 )
         );
-        if(!listOfProducts.hasContent()){
-            throw new ProductNotFoundException("No products found");
-        }
-        return listOfProducts;
     }
 
     @Override
     public Product createProduct(Product product, String category) {
         Optional<Category> optionalCategory = categoryService.getCategoryByTitle(category);
-        if (optionalCategory.isPresent()) {
-            Category categoryObject = optionalCategory.get();
-            product.setCategory(categoryObject);
-        } else {
-            Category categoryObject = categoryService.createCategory(category);
-            product.setCategory(categoryObject);
+        if (optionalCategory.isEmpty()) {
+            throw new CategoryNotFoundException("Category not found with title: " + category + "");
         }
+        product.setCategory(optionalCategory.get());
         product.setCreatedAt(new Date());
         product.setUpdatedAt(new Date());
         product.setIsActive(true);

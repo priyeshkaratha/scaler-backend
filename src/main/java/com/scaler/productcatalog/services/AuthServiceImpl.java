@@ -23,7 +23,7 @@ import java.util.Optional;
 @Service
 public class AuthServiceImpl implements AuthService{
 
-    private static final String ROLE_USER = "ROLE_USER";
+    private static final String ROLE_USER = "NON_ADMIN_USER";
 
     @Autowired
     private UserRepository userRepository;
@@ -54,7 +54,7 @@ public class AuthServiceImpl implements AuthService{
                 .subject(user.get().getEmail())
                 .claim("userId", user.get().getId())
                 .issuedAt(new Date())
-                .expiration(new Date(System.currentTimeMillis() + 1000 * 60 * 1)) // 1 hour
+                .expiration(new Date(System.currentTimeMillis() + 1000 * 60 * 10)) //  10 mins
                 .signWith(secretKey)
                 .compact();
 
@@ -90,6 +90,7 @@ public class AuthServiceImpl implements AuthService{
             role.setValue(ROLE_USER);
             role.setIsActive(true);
             role.setCreatedAt(new Date());
+            role.setUpdatedAt(new Date());
             roleRepository.save(role);
         } else {
             role = roleOptional.get();
@@ -120,15 +121,18 @@ public class AuthServiceImpl implements AuthService{
         Date now = new Date();
         if(now.after(exp)){
             sessionObject.setIsActive(false);
+            sessionRepository.save(sessionObject);
             throw new UserNotFoundException("Token expired");
         }
         User user = sessionObject.getUser();
         if (Boolean.FALSE.equals(user.getIsActive())) {
             sessionObject.setIsActive(false);
+            sessionRepository.save(sessionObject);
             throw new UserNotFoundException("User is inactive");
         }
         if(!user.getId().equals(Long.parseLong(userId))){
             sessionObject.setIsActive(false);
+            sessionRepository.save(sessionObject);
             throw new UserNotFoundException("Invalid token");
         }
         return user;
