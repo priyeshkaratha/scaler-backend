@@ -1,8 +1,9 @@
 package com.scaler.productcatalog.controllers;
 
+import com.scaler.productcatalog.dtos.ProductResponseDto;
 import com.scaler.productcatalog.dtos.SearchRequestDto;
-import com.scaler.productcatalog.models.Product;
 import com.scaler.productcatalog.services.SearchService;
+import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
@@ -19,8 +20,7 @@ public class SearchController {
     private SearchService searchService;
 
     @PostMapping
-    public ResponseEntity<Page<Product>> search(@RequestBody SearchRequestDto searchRequestDto){
-        Page<Product> products = searchService.searchProducts(searchRequestDto);
-        return ResponseEntity.ok(products);
+    public ResponseEntity<Page<ProductResponseDto>> search(@Valid @RequestBody SearchRequestDto searchRequestDto){
+        return ResponseEntity.ok(searchService.searchProducts(searchRequestDto).map(ProductResponseDto::from));
     }
 }

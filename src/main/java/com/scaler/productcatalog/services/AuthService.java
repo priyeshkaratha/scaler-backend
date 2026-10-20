@@ -1,11 +1,11 @@
 package com.scaler.productcatalog.services;
 
-import com.scaler.productcatalog.exceptions.UserNotFoundException;
 import com.scaler.productcatalog.models.User;
-import org.antlr.v4.runtime.misc.Pair;
 
 public interface AuthService {
-    Pair<User, String> login(String email, String password) throws UserNotFoundException;
-    User register(String email, String password, String firstName, String lastName) throws UserNotFoundException;
-    User validateToken(String token) throws UserNotFoundException;
+    LoginResult login(String email, String password);
+    User register(String email, String password, String firstName, String lastName);
+    User registerAdmin(String email, String password);
+    User validateToken(String token);
+    void logout(String token);
 }
