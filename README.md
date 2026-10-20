@@ -1,6 +1,6 @@
 # Product Catalog REST API
 
-A secure, production-ready RESTful backend service for managing e-commerce product catalogs — built with **Java 21**, **Spring Boot**, **Spring Security (JWT)**, and **MySQL**, containerised via **Docker**.
+A secure, production-ready RESTful backend service for managing e-commerce product catalogs — built with **Java 21**, **Spring Boot**, **Spring Security (JWT, role-based access)**, and **MySQL**, containerised via **Docker** and deployed to **AWS Elastic Beanstalk** with **GitHub Actions**.
 
 ---
 
@@ -16,6 +16,9 @@ A secure, production-ready RESTful backend service for managing e-commerce produ
 8. [API Reference](#8-api-reference)
 9. [Tech Stack](#9-tech-stack)
 10. [Getting Started](#10-getting-started)
+11. [Low Level Design (LLD)](#11-low-level-design-lld)
+    - [11.1 Class Diagrams](#111-class-diagrams)
+    - [11.2 Database Schema Design](#112-database-schema-design)
 
 ---
 
@@ -187,38 +190,55 @@ Category ──< Product      (one category → many products)
 
 ## 8. API Reference
 
+All endpoints except `/auth/signup`, `/auth/login`, `/auth/validate` and `/actuator/health` require an
+`Authorization: Bearer <JWT>` header. Write endpoints additionally require the `ADMIN` role.
+Errors are always returned as `{"message": "...", "status": <code>}`.
+
 ### Authentication
 
-| Method | Endpoint | Auth | Description |
-|--------|----------|------|-------------|
-| `POST` | `/auth/signup` | No | Register a new user |
-| `POST` | `/auth/login` | No | Login — returns JWT in `Authorization` header |
-| `POST` | `/auth/validate` | No | Validate a JWT token |
+| Method | Endpoint | Access | Description |
+|--------|----------|--------|-------------|
+| `POST` | `/auth/signup` | Public | Register a new user (role `NON_ADMIN_USER`), returns `201` |
+| `POST` | `/auth/login` | Public | Login, returns JWT in the `Authorization` header |
+| `POST` | `/auth/validate` | Public | Validate a JWT token |
+| `POST` | `/auth/logout` | Authenticated | Revoke the current token, returns `204` |
 
 ### Products
 
-| Method | Endpoint | Auth | Description |
-|--------|----------|------|-------------|
-| `GET` | `/products` | Yes | List all products (paginated, sortable) |
-| `GET` | `/products/{id}` | Yes | Get a single product by ID |
-| `POST` | `/products` | Yes | Create a new product |
-| `PUT` | `/products/{id}` | Yes | Update a product |
-| `DELETE` | `/products/{id}` | Yes | Delete a product |
+| Method | Endpoint | Access | Description |
+|--------|----------|--------|-------------|
+| `GET` | `/products?pageNumber=0&pageSize=10&fieldName=id` | Authenticated | List products (paginated, sortable, page size 1 to 100) |
+| `GET` | `/products/{id}` | Authenticated | Get a single product by ID |
+| `POST` | `/products` | ADMIN | Create a product in an existing category, returns `201` |
+| `PUT` | `/products/{id}` | ADMIN | Update a product |
+| `DELETE` | `/products/{id}` | ADMIN | Delete a product |
 
 ### Categories
 
-| Method | Endpoint | Auth | Description |
-|--------|----------|------|-------------|
-| `GET` | `/category` | Yes | List all categories (paginated) |
-| `POST` | `/category` | Yes | Create a new category |
+| Method | Endpoint | Access | Description |
+|--------|----------|--------|-------------|
+| `GET` | `/category?pageNumber=0&pageSize=10&fieldName=id` | Authenticated | List categories (paginated) |
+| `POST` | `/category` | ADMIN | Create a category (titles are unique, duplicates return `409`) |
 
 ### Search
 
-| Method | Endpoint | Auth | Description |
-|--------|----------|------|-------------|
-| `POST` | `/search` | Yes | Search products by keyword, category, and/or price range |
+| Method | Endpoint | Access | Description |
+|--------|----------|--------|-------------|
+| `POST` | `/search` | Authenticated | Search by keyword, category (exact, case-insensitive) and/or price range |
 
-**Supported `sortBy` fields for products:** `id`, `title`, `price`, `createdAt`, `updatedAt`
+**Supported `sortBy` fields for products:** `id`, `title`, `price`, `createdAt`, `updatedAt` (anything else falls back to `id`).
+
+Paged responses use a stable structure:
+
+```json
+{ "content": [ ... ], "page": { "size": 10, "number": 0, "totalElements": 42, "totalPages": 5 } }
+```
+
+### Operations
+
+| Method | Endpoint | Access | Description |
+|--------|----------|--------|-------------|
+| `GET` | `/actuator/health` | Public | Health check used by the load balancer |
 
 ---
 
@@ -228,11 +248,14 @@ Category ──< Product      (one category → many products)
 |-------|------------|
 | Language | Java 21 |
 | Framework | Spring Boot 4.0.3 |
-| Web | Spring MVC |
-| Security | Spring Security + JWT (`jjwt` 0.13.0) |
+| Web | Spring MVC + Jakarta Bean Validation |
+| Security | Spring Security (role-based) + JWT (`jjwt` 0.13.0) + BCrypt |
 | Persistence | Spring Data JPA + Hibernate |
-| Database | MySQL 8.0 |
-| Containerisation | Docker + Docker Compose |
+| Database | MySQL 8.0 (H2 for tests) |
+| Observability | Spring Boot Actuator (health) |
+| Testing | JUnit 5, Mockito, MockMvc |
+| Containerisation | Docker (multi-stage image) + Docker Compose |
+| CI/CD | GitHub Actions → AWS Elastic Beanstalk |
 | Boilerplate reduction | Lombok |
 | Build tool | Maven (Maven Wrapper included) |
 | Seed data | Python 3 (stdlib only) |
@@ -247,28 +270,39 @@ Category ──< Product      (one category → many products)
 - Maven or use the included `./mvnw` wrapper
 - Docker & Docker Compose
 
-### 1. Start the database
+### Option A: run everything in Docker
 
 ```bash
-cd docker
-docker compose up -d
+docker compose -f docker/docker-compose.yaml up -d --build
+curl http://localhost:8080/actuator/health
 ```
 
-### 2. Run the application
+The compose file creates a bootstrap admin `admin@productcatalog.local` / `ChangeMe123!` (local use only).
+
+### Option B: database in Docker, application from source
 
 ```bash
-./mvnw spring-boot:run
+docker compose -f docker/docker-compose.yaml up -d db
+ADMIN_EMAIL=admin@example.com ADMIN_PASSWORD='ChangeMe123!' ./mvnw spring-boot:run
 ```
 
 The API will be available at `http://localhost:8080`.
 
-### 3. (Optional) Seed the database
+### Run the tests
+
+```bash
+./mvnw verify      # 21 unit and integration tests, uses in-memory H2
+```
+
+### Seed the database
+
+Products and categories can only be created by an `ADMIN`, so seed with the bootstrap admin account:
 
 ```bash
 python3 scripts/seed_catalog.py \
   --base-url http://localhost:8080 \
-  --email test@example.com \
-  --password secret123 \
+  --email admin@productcatalog.local \
+  --password 'ChangeMe123!' \
   --products 100
 ```
 
@@ -278,7 +312,173 @@ This creates 10 categories and 100 products with realistic randomised data.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `JWT_SECRET` | Base64 demo key | Secret key for signing JWT tokens — **override in production** |
+| `SPRING_DATASOURCE_URL` | `jdbc:mysql://localhost:3306/productcatalog?createDatabaseIfNotExist=true` | JDBC URL |
+| `SPRING_DATASOURCE_USERNAME` / `SPRING_DATASOURCE_PASSWORD` | `root` / `my-secret-pw` | Database credentials, **override in production** |
+| `JWT_SECRET` | Base64 demo key | HMAC key for signing JWTs (at least 256 bits), **override in production** |
+| `JWT_EXPIRY_MINUTES` | `10` | Token lifetime |
+| `ADMIN_EMAIL` / `ADMIN_PASSWORD` | empty | Creates the first `ADMIN` user at start-up if it does not exist |
+| `SPRING_JPA_HIBERNATE_DDL_AUTO` | `update` | Hibernate schema mode |
+| `SPRING_JPA_SHOW_SQL` | `false` | Log generated SQL |
+
+### Deployment (GitHub Actions → AWS Elastic Beanstalk)
+
+![CI/CD Pipeline](docs/cicd_pipeline.png)
+
+- `.github/workflows/ci.yml` builds, tests and builds the Docker image on every pull request.
+- `.github/workflows/deploy.yml` tests, packages and deploys every push to `main`:
+  it zips `productcatalog.jar` with `deploy/beanstalk/Procfile` and `.ebextensions`, uploads it to S3,
+  creates an application version, performs a rolling update and verifies `/actuator/health`.
+
+Repository configuration required by `deploy.yml`:
+
+| Kind | Name | Value |
+|------|------|-------|
+| Secret | `AWS_DEPLOY_ROLE_ARN` | IAM role trusted for GitHub OIDC (`token.actions.githubusercontent.com`) |
+| Variable | `AWS_REGION` | e.g. `ap-south-1` |
+| Variable | `EB_APPLICATION_NAME` | Elastic Beanstalk application |
+| Variable | `EB_ENVIRONMENT_NAME` | Elastic Beanstalk environment (Java SE / Corretto 21, load balanced) |
+| Variable | `EB_S3_BUCKET` | Bucket for application versions |
+
+Database credentials, `JWT_SECRET` and `ADMIN_*` are set once as environment properties on the Beanstalk environment.
+
+![AWS Deployment Architecture](docs/aws_deployment.png)
+
+### Performance
+
+With 100,000 products and 50,000 historical sessions, indexes on `session.token`, `product.price` and
+`product(category_id, price)` cut median latency by 55% (product by id), 59% (price-range search) and
+49% (category search). Keyword search (`LIKE '%term%'`) is not index-assisted.
+
+![Benchmark](docs/benchmark.png)
+
+---
+
+## 11. Low Level Design (LLD)
+
+### 11.1 Class Diagrams
+
+The class diagram below captures the full structure of the application — models, service interfaces and their implementations, controllers, and repositories — along with their dependencies and relationships.
+
+**Figure 1 — UML Class Diagram: Product Catalog API**
+
+![Class Diagram — Product Catalog API](docs/class_diagram.png)
+
+*Figure 1: UML Class Diagram showing Controllers, Service interfaces, Service implementations, Domain Models (all inheriting from BaseModel), and JPA Repositories with their dependencies and associations.*
+
+#### Class Descriptions
+
+**Models Layer**
+
+| Class | Type | Responsibility |
+|-------|------|----------------|
+| `BaseModel` | Abstract (`@MappedSuperclass`) | Shared audit fields: `id`, `createdAt`, `updatedAt`, `isActive` — inherited by all entities |
+| `Product` | Entity | Represents a catalog item; holds `title`, `description`, `imageUrl`, `price`; many-to-one link to `Category` |
+| `Category` | Entity | Groups products by type; one-to-many link to `Product` list (lazy-loaded, JSON-ignored) |
+| `User` | Entity | Registered API consumer; holds credentials and a many-to-many link to `Role` |
+| `Role` | Entity | Permission label (e.g. `NON_ADMIN_USER`) assigned to users |
+| `Session` | Entity | Active JWT token record; many-to-one link to the owning `User` |
+
+**Services Layer**
+
+| Interface | Implementation | Key Responsibilities |
+|-----------|---------------|---------------------|
+| `ProductService` | `ProductServiceImpl` | CRUD on products, pagination, sort validation, category resolution |
+| `AuthService` | `AuthServiceImpl` | BCrypt password hashing, JWT generation (10-min expiry), token validation, session management |
+| `CategoryService` | `CategoryServiceImpl` | Category creation and lookup by title |
+| `SearchService` | `SearchServiceImpl` | Builds composable `JPA Specification` from keyword, category, and price-range filters |
+
+**Controllers Layer**
+
+| Controller | Route Prefix | Delegates To |
+|------------|-------------|--------------|
+| `ProductController` | `/products` | `ProductService` |
+| `AuthController` | `/auth` | `AuthService` |
+| `CategoryController` | `/category` | `CategoryService` |
+| `SearchController` | `/search` | `SearchService` |
+
+**Repositories Layer**
+
+| Repository | Extends | Special Capability |
+|------------|---------|-------------------|
+| `ProductRepository` | `JpaRepository`, `JpaSpecificationExecutor` | Supports dynamic `Specification`-based queries for search |
+| `CategoryRepository` | `JpaRepository` | Lookup by title |
+| `UserRepository` | `JpaRepository` | Lookup by email |
+| `SessionRepository` | `JpaRepository` | Lookup by token string |
+| `RoleRepository` | `JpaRepository` | Lookup by value |
+
+---
+
+### 11.2 Database Schema Design
+
+#### Schema Description (Textual)
+
+**Tables:**
+
+```
+product
+  id            BIGINT          PRIMARY KEY (Hibernate product_seq)
+  title         VARCHAR(255)    NOT NULL
+  description   VARCHAR(2000)
+  image_url     VARCHAR(1000)
+  price         DOUBLE          NOT NULL   INDEX idx_product_price
+  category_id   BIGINT          FK → category(id)   INDEX idx_product_category_price (category_id, price)
+  created_at    DATETIME(6)
+  updated_at    DATETIME(6)
+  is_active     BIT
+
+category
+  id            BIGINT          PRIMARY KEY
+  title         VARCHAR(255)    NOT NULL UNIQUE
+  created_at, updated_at, is_active
+
+user
+  id            BIGINT          PRIMARY KEY
+  email         VARCHAR(255)    NOT NULL UNIQUE
+  password      VARCHAR(255)    NOT NULL  (BCrypt hash)
+  first_name    VARCHAR(255)
+  last_name     VARCHAR(255)
+  created_at, updated_at, is_active
+
+role
+  id            BIGINT          PRIMARY KEY
+  value         VARCHAR(255)    NOT NULL UNIQUE  (ADMIN, NON_ADMIN_USER)
+  created_at, updated_at, is_active
+
+session
+  id            BIGINT          PRIMARY KEY
+  token         VARCHAR(512)    NOT NULL UNIQUE  (idx_session_token, JWT string)
+  user_id       BIGINT          FK → user(id)
+  created_at, updated_at, is_active
+
+user_roles  (join table — many-to-many)
+  user_id       BIGINT          FK → user(id)
+  roles_id      BIGINT          FK → role(id)
+```
+
+**Foreign Keys:**
+
+```
+product(category_id)      → category(id)
+session(user_id)          → user(id)
+user_roles(user_id)       → user(id)
+user_roles(roles_id)      → role(id)
+```
+
+**Cardinality of Relations:**
+
+| Relationship | Cardinality | Description |
+|---|---|---|
+| `product` ↔ `category` | M : 1 | Many products belong to one category |
+| `user` ↔ `role` | M : M | A user can have many roles; a role can be assigned to many users |
+| `user` ↔ `session` | 1 : M | One user can have multiple active sessions (tokens) |
+
+#### Schema Diagram
+
+**Figure 2 — Database Schema: Product Catalog**
+
+![Database Schema — Product Catalog](docs/db_schema.png)
+
+*Figure 2: Entity-Relationship schema diagram showing all six tables (product, category, user, role, session, user_roles), their column definitions with data types and constraints, foreign-key relationships with their cardinalities, and the indexes added for performance.*
 
 ---
 

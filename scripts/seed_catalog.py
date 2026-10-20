@@ -150,7 +150,6 @@ def signup(base_url: str, email: str, password: str, first_name: str, last_name:
             "password": password,
             "firstName": first_name,
             "lastName": last_name,
-            "roles": [],
         },
     )
 
@@ -210,9 +209,9 @@ def create_products(base_url: str, token: str, total_products: int) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Seed 10 categories and 100 products into productcatalog API")
     parser.add_argument("--base-url", default="http://localhost:8080", help="API base URL")
-    parser.add_argument("--email", required=True, help="Login email")
+    parser.add_argument("--email", required=True, help="Login email of an ADMIN user (see ADMIN_EMAIL)")
     parser.add_argument("--password", required=True, help="Login password")
-    parser.add_argument("--signup-if-missing", action="store_true", help="Signup user if login fails")
+    parser.add_argument("--signup-if-missing", action="store_true", help="Signup user if login fails (new users are NON_ADMIN_USER and cannot create data)")
     parser.add_argument("--first-name", default="Catalog", help="First name for signup fallback")
     parser.add_argument("--last-name", default="Seeder", help="Last name for signup fallback")
     parser.add_argument("--products", type=int, default=100, help="Number of products to create")
