@@ -1,0 +1,101 @@
+name: Deploy to AWS Elastic Beanstalk
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Required repository configuration:
+#   secrets.AWS_DEPLOY_ROLE_ARN   IAM role trusted for GitHub OIDC (no long-lived access keys)
+#   vars.AWS_REGION               e.g. ap-south-1
+#   vars.EB_APPLICATION_NAME      e.g. productcatalog
+#   vars.EB_ENVIRONMENT_NAME      e.g. productcatalog-prod
+#   vars.EB_S3_BUCKET             bucket that stores application versions
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+      - name: Build and run tests
+        run: ./mvnw -B verify
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      EB_APP: ${{ vars.EB_APPLICATION_NAME }}
+      EB_ENV: ${{ vars.EB_ENVIRONMENT_NAME }}
+      EB_BUCKET: ${{ vars.EB_S3_BUCKET }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: Package application
+        run: ./mvnw -B package -DskipTests
+
+      - name: Build Elastic Beanstalk source bundle
+        id: bundle
+        run: |
+          VERSION="${GITHUB_SHA::7}-${GITHUB_RUN_NUMBER}"
+          mkdir -p bundle
+          cp target/productcatalog.jar bundle/
+          cp deploy/beanstalk/Procfile bundle/
+          cp -r deploy/beanstalk/.ebextensions bundle/
+          (cd bundle && zip -qr "../productcatalog-${VERSION}.zip" .)
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "file=productcatalog-${VERSION}.zip" >> "$GITHUB_OUTPUT"
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Upload bundle to S3
+        run: aws s3 cp "${{ steps.bundle.outputs.file }}" "s3://${EB_BUCKET}/${EB_APP}/${{ steps.bundle.outputs.file }}"
+
+      - name: Create application version
+        run: |
+          aws elasticbeanstalk create-application-version \
+            --application-name "$EB_APP" \
+            --version-label "${{ steps.bundle.outputs.version }}" \
+            --description "Commit ${GITHUB_SHA}" \
+            --source-bundle S3Bucket="$EB_BUCKET",S3Key="${EB_APP}/${{ steps.bundle.outputs.file }}" \
+            --process
+
+      - name: Deploy to environment
+        run: |
+          aws elasticbeanstalk update-environment \
+            --environment-name "$EB_ENV" \
+            --version-label "${{ steps.bundle.outputs.version }}"
+          aws elasticbeanstalk wait environment-updated --environment-names "$EB_ENV"
+
+      - name: Verify deployment
+        run: |
+          read -r HEALTH VERSION CNAME <<< "$(aws elasticbeanstalk describe-environments \
+            --environment-names "$EB_ENV" \
+            --query 'Environments[0].[Health,VersionLabel,CNAME]' --output text)"
+          echo "Health=${HEALTH} Version=${VERSION} CNAME=${CNAME}"
+          test "$VERSION" = "${{ steps.bundle.outputs.version }}"
+          curl --fail --silent --show-error --retry 10 --retry-delay 10 --retry-all-errors "http://${CNAME}/actuator/health"

@@ -1,16 +1,40 @@
+# Local stack.
+#   Database only:   docker compose -f docker/docker-compose.yaml up -d db
+#   Database + API:  docker compose -f docker/docker-compose.yaml up -d --build
 services:
   db:
-    image: mysql:8.0 # Use the official MySQL 8.0 image from Docker Hub
+    image: mysql:8.0
     container_name: my-mysql
-    restart: always # Ensures the container restarts automatically if it fails
+    restart: always
     environment:
-      MYSQL_ROOT_PASSWORD: my-secret-pw # **Change this to a secure password**
-      MYSQL_DATABASE: mydb # Optional: creates a default database on startup
+      MYSQL_ROOT_PASSWORD: my-secret-pw # local development only
+      MYSQL_DATABASE: productcatalog
     ports:
-      - "3306:3306" # Maps the containers MySQL port to your host machines port
+      - "3306:3306"
     volumes:
-      - mysql-data:/var/lib/mysql # Persists data to a named volume
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-pmy-secret-pw"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  app:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    container_name: productcatalog-api
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://db:3306/productcatalog
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: my-secret-pw
+      ADMIN_EMAIL: admin@productcatalog.local
+      ADMIN_PASSWORD: ChangeMe123!
+    ports:
+      - "8080:8080"
 
 volumes:
-  mysql-data: # Defines the named volume
-
+  mysql-data:
